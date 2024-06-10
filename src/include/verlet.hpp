@@ -7,7 +7,7 @@ using namespace std;
 
 sf::Color temp_to_col(float T)
 {
-	float R = 100.f, G = 200.f, B = 400.f;
+	float R = 5000.f, G = 20000.f, B = 30000.f;
 	float r = min(255.f, T / R * 255.f);
 	float g = max(0.f, min(255.f, (T-R)/(G-R) * 255.f));
 	float b = max(0.f, min(255.f, (T-G)/(B-G) * 255.f));
@@ -30,6 +30,7 @@ struct particle
     sf::Vector2f rr;
 
     float temperature;
+    float k = 800.f;
 
     particle()
     {
@@ -47,7 +48,7 @@ struct particle
         position = pos;
         temperature = 100.f;
         old_position = position;
-        radius = 10.f;
+        radius = 5.f;
         rr = {radius, radius};
         shape.setRadius(radius);
         shape.setFillColor(sf::Color::Green);
@@ -64,8 +65,16 @@ struct particle
 
         acceleration = {};
 
+        temperature -= k * dt;
+        if (temperature < 0) temperature = 0;
+
         shape.setPosition(position - rr);
         shape.setFillColor(temp_to_col(temperature));
+    }
+
+    void update_velocity(sf::Vector2f v, float dt)
+    {
+        old_position = position - v * dt;
     }
 
     void accelerate(sf::Vector2f acc)
@@ -77,10 +86,11 @@ struct particle
 
 struct Solver
 {
-    sf::Vector2f gravity = {0.f, 8.f};
-    float k = 0.1f;
+    sf::Vector2f gravity = {0.f, 12.f};
     vector<particle> P;
+    float k = 0.6f;
     int n;
+    float border_x = 900.f, border_y = 900.f;
 
     Solver(int a)
     {
@@ -104,7 +114,7 @@ struct Solver
     {
         for (auto &particle : P)
         {
-            sf::Vector2f F = {0.f, -0.02f * (min(1000.f, particle.temperature))};
+            sf::Vector2f F = {0.f, -0.01f * (min(20000.f, particle.temperature))};
             particle.accelerate(F);
         }
     }
@@ -131,8 +141,7 @@ struct Solver
         //         particle.position = center + n;
         //     }
         // }
-
-        float border_x = 900.f, border_y = 900.f;
+        
         for (auto &particle: P)
         {
             particle.position.x = min(particle.position.x, border_x - particle.radius);
@@ -142,19 +151,37 @@ struct Solver
         }
     }
 
-    void solve_collisions()
+    void solve_collisions(float dt)
     {
         for (int i = 0; i < n-1; i++)
-        for (int j = i+1; j < n; j++)
         {
-            sf::Vector2f col_axis = P[i].position - P[j].position;
-            float dist = length(col_axis);
-            if (dist < P[i].radius+P[j].radius)
+            // temp update
+            if (P[i].position.y+P[i].radius>=border_y-40.f)
+                P[i].temperature += 0.3f * (20000 - P[i].temperature) * dt;
+
+            for (int j = i+1; j < n; j++)
             {
-                col_axis = col_axis / dist;
-                dist = P[i].radius+P[j].radius - dist;
-                P[i].position = P[i].position + col_axis * .5f * dist;
-                P[j].position = P[j].position - col_axis * .5f * dist;
+                if (P[j].position.x - P[i].position.x > 20.f) break;
+
+                sf::Vector2f col_axis = P[i].position - P[j].position;
+                float dist = length(col_axis);
+
+                if (dist < P[i].radius+P[j].radius)
+                {
+                    col_axis = col_axis / dist;
+                    dist = P[i].radius+P[j].radius - dist;
+                    P[i].position = P[i].position + col_axis * .5f * dist;
+                    P[j].position = P[j].position - col_axis * .5f * dist;
+
+                    // update temp
+                    float delta_T = P[i].temperature-P[j].temperature;
+                    
+                    P[i].temperature = P[i].temperature - 0.5f * delta_T * dt;
+                    P[j].temperature = P[j].temperature + 0.5f * delta_T * dt;
+
+                    P[i].shape.setFillColor(temp_to_col(P[i].temperature));
+                    P[j].shape.setFillColor(temp_to_col(P[i].temperature));
+                }
             }
         }
     }
@@ -164,8 +191,11 @@ struct Solver
         for (int i = 0; i < n-1; i++)
         for (int j = i+1; j < n; j++)
         {
+            if (P[j].position.x - P[i].position.x > 21.f) break;
+
             sf::Vector2f col_axis = P[i].position - P[j].position;
             float dist = length(col_axis)-0.03f;
+
             if (dist < P[i].radius+P[j].radius)
             {
                 float delta_T = P[i].temperature-P[j].temperature;
@@ -177,16 +207,23 @@ struct Solver
                 P[j].shape.setFillColor(temp_to_col(P[i].temperature));
             }
         }
+
+        for (auto &particle : P)
+        {
+            if (particle.position.y+particle.radius>=border_y-1.f)
+                particle.temperature += 0.3f * k * (20000 - particle.temperature) * dt;
+        }
     }
 
     void update(float dt)
     {
-        for (int i = 0; i < 2; i++)
+        for (int i = 0; i < 1; i++)
         {
+            sort(P.begin(), P.end(), [](particle &a, particle &b){return a.position.x < b.position.x;});
             apply_gravity();
             apply_bouyant_force();
             apply_constraint();
-            solve_collisions();
+            solve_collisions(dt);
             update_position(dt);
         }
     }
