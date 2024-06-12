@@ -19,8 +19,8 @@ int main()
 
     Solver solver(0);
 
-    for (float x = 20.f; x < 880.f; x += 22.f)
-    for (float y = 20.f; y < 300.f; y += 22.f)
+    for (float x = 22.f; x < 340.f; x += 7.f)
+    for (float y = 12.f; y < 540.f; y += 7.f)
     {
         solver.add_particle(sf::Vector2f(x, y));
         solver.P.back().update_velocity(sf::Vector2f(1.f, 0.f), 0.01f);
@@ -41,8 +41,8 @@ int main()
 
         
 
-        solver.update(0.01f);
-        // window.draw(rectangle);
+        solver.update(0.04f);
+        window.draw(rectangle);
 
         // if (solver.n >= 700)
         for (auto &particle: solver.P)
